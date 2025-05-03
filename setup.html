@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Setup Inicial</title>
+    <script src="https://cdn.jsdelivr.net/npm/appwrite@11.0.0"></script>
+    <script src="js/appwrite-config.js"></script>
+</head>
+<body>
+    <h1>Configuração Inicial</h1>
+    <button id="createAdminBtn">Criar Usuário Admin</button>
+    
+    <script>
+        document.getElementById('createAdminBtn').addEventListener('click', async function() {
+            try {
+                // Criar usuário no Appwrite
+                const user = await account.create(
+                    'unique()', 
+                    'admin@flowbnb.com',
+                    'admin123',
+                    'Administrador'
+                );
+                
+                // Adicionar dados adicionais na coleção de usuários
+                await databases.createDocument(
+                    DATABASE_ID,
+                    USERS_COLLECTION_ID,
+                    'unique()',
+                    {
+                        email: 'admin@flowbnb.com',
+                        name: 'Administrador',
+                        role: 'admin'
+                    }
+                );
+                
+                alert('Usuário administrador criado com sucesso!');
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao criar usuário: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>
