@@ -1,12 +1,12 @@
-// appwrite-config.js
+// js/appwrite-config.js
 const client = new Appwrite.Client();
 
-// Configure sua instância do Appwrite Cloud
+// Configure sua instância do Appwrite
 client
     .setEndpoint('https://cloud.appwrite.io/v1')
     .setProject('68161a6100001e126778'); // Substitua pelo ID do seu projeto
 
-// Cria os serviços
+// Inicializa os serviços do Appwrite
 const account = new Appwrite.Account(client);
 const databases = new Appwrite.Databases(client);
 const storage = new Appwrite.Storage(client);
