@@ -1,3 +1,4 @@
+// js/properties.js
 document.addEventListener('DOMContentLoaded', function() {
     // Atualiza o nome do usuário na sidebar
     updateUserInfo();
@@ -8,242 +9,116 @@ document.addEventListener('DOMContentLoaded', function() {
     // Carrega as propriedades
     loadProperties();
     
-    // Atualiza o menu lateral com as propriedades
-    updateSidebar();
+    // Configura os eventos dos modais
+    setupModalEvents();
 });
 
-function updateUserInfo() {
-    const userName = localStorage.getItem('userName');
-    const userNameElement = document.getElementById('userName');
-    
-    if (userNameElement && userName) {
-        userNameElement.textContent = userName;
-    }
-}
-
-function checkUserPermissions() {
-    const userRole = localStorage.getItem('userRole');
-    
-    // Se não for admin, redireciona para o dashboard
-    if (userRole !== 'admin') {
-        alert('Você não tem permissão para acessar esta página.');
-        window.location.href = 'dashboard.html';
-    }
-}
-
-function loadProperties() {
-    // Obtém as propriedades do localStorage
-    const propertiesRegistry = JSON.parse(localStorage.getItem('propertiesRegistry')) || {};
-    const propertiesData = JSON.parse(localStorage.getItem('propertiesData')) || {};
-    
-    // Referência para a tabela
-    const tableBody = document.getElementById('propertiesTableBody');
-    const noPropertiesMessage = document.getElementById('noPropertiesMessage');
-    
-    // Limpa a tabela
-    tableBody.innerHTML = '';
-    
-    // Se não houver propriedades, mostra mensagem
-    if (Object.keys(propertiesRegistry).length === 0) {
-        noPropertiesMessage.classList.remove('d-none');
-        return;
-    }
-    
-    noPropertiesMessage.classList.add('d-none');
-    
-    // Adiciona cada propriedade à tabela
-    Object.entries(propertiesRegistry).forEach(([id, property]) => {
-        const row = document.createElement('tr');
+async function updateUserInfo() {
+    try {
+        // Obtém as informações do usuário atual
+        const user = await account.get();
+        const userName = user.name || user.email;
         
-        // Conta o número de transações
-        const transactionsCount = propertiesData[id]?.transactions?.length || 0;
+        // Atualiza o nome do usuário na interface
+        const userNameElement = document.getElementById('userName');
+        if (userNameElement) {
+            userNameElement.textContent = userName;
+        }
+    } catch (error) {
+        console.error('Erro ao obter informações do usuário:', error);
+    }
+}
+
+async function checkUserPermissions() {
+    try {
+        // Obtém o usuário atual
+        const user = await account.get();
         
-        row.innerHTML = `
-            <td>${id}</td>
-            <td>${property.name}</td>
-            <td>${transactionsCount}</td>
-            <td>
-                <button class="btn btn-sm btn-primary me-1" onclick="editProperty('${id}')">
-                    <i class="bi bi-pencil"></i> Editar
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteProperty('${id}')">
-                    <i class="bi bi-trash"></i> Excluir
-                </button>
-            </td>
-        `;
+        // Busca os detalhes do usuário no banco de dados
+        const userData = await databases.listDocuments(
+            DATABASE_ID,
+            USERS_COLLECTION_ID,
+            [Appwrite.Query.equal('userId', user.$id)]
+        );
         
-        tableBody.appendChild(row);
-    });
+        // Se o usuário não for admin, redireciona para o dashboard
+        if (userData.documents.length > 0 && userData.documents[0].role !== 'admin') {
+            alert('Você não tem permissão para acessar esta página.');
+            window.location.href = 'dashboard.html';
+        }
+    } catch (error) {
+        console.error('Erro ao verificar permissões:', error);
+        // Se ocorrer algum erro, redireciona para a página de login
+        window.location.href = '../index.html';
+    }
 }
 
-function updateSidebar() {
-    // Obtém as propriedades do localStorage
-    const propertiesRegistry = JSON.parse(localStorage.getItem('propertiesRegistry')) || {};
-    
-    // Referência para o contêiner de links
-    const propertyLinks = document.getElementById('propertyLinks');
-    
-    // Limpa os links existentes
-    propertyLinks.innerHTML = '';
-    
-    // Adiciona cada propriedade ao menu
-    Object.entries(propertiesRegistry).forEach(([id, property]) => {
-        const listItem = document.createElement('li');
-        listItem.innerHTML = `
-            <a href="property.html?id=${id}" class="nav-link">
-                <i class="bi bi-house me-2"></i>
-                ${property.name}
-            </a>
-        `;
+async function loadProperties() {
+    try {
+        // Busca todas as propriedades no banco de dados
+        const properties = await databases.listDocuments(
+            DATABASE_ID,
+            PROPERTIES_COLLECTION_ID
+        );
         
-        propertyLinks.appendChild(listItem);
-    });
+        // Referência para a tabela
+        const tableBody = document.getElementById('propertiesTableBody');
+        const noPropertiesMessage = document.getElementById('noPropertiesMessage');
+        
+        // Limpa a tabela
+        tableBody.innerHTML = '';
+        
+        // Se não houver propriedades, mostra mensagem
+        if (properties.documents.length === 0) {
+            noPropertiesMessage.classList.remove('d-none');
+            return;
+        }
+        
+        noPropertiesMessage.classList.add('d-none');
+        
+        // Adiciona cada propriedade à tabela
+        for (const property of properties.documents) {
+            // Busca as transações desta propriedade
+            const transactions = await databases.listDocuments(
+                DATABASE_ID,
+                TRANSACTIONS_COLLECTION_ID,
+                [Appwrite.Query.equal('propertyId', property.$id)]
+            );
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${property.$id}</td>
+                <td>${property.name}</td>
+                <td>${transactions.documents.length}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary me-1" onclick="editProperty('${property.$id}')">
+                        <i class="bi bi-pencil"></i> Editar
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteProperty('${property.$id}')">
+                        <i class="bi bi-trash"></i> Excluir
+                    </button>
+                </td>
+            `;
+            
+            tableBody.appendChild(row);
+        }
+    } catch (error) {
+        console.error('Erro ao carregar propriedades:', error);
+        alert('Erro ao carregar propriedades. Por favor, tente novamente.');
+    }
 }
 
-function saveProperty() {
-    // Obtém os valores do formulário
-    const propertyId = document.getElementById('propertyId').value;
-    const propertyName = document.getElementById('propertyName').value.trim();
-    const propertyAddress = document.getElementById('propertyAddress').value.trim();
-    
-    // Validação básica
-    if (!propertyName) {
-        alert('Por favor, informe o nome da propriedade.');
-        return;
+function setupModalEvents() {
+    // Configura o modal de adicionar/editar propriedade
+    const propertyModal = document.getElementById('addPropertyModal');
+    if (propertyModal) {
+        propertyModal.addEventListener('show.bs.modal', function(event) {
+            // Se for aberto pelo botão "Nova Propriedade", reseta o formulário
+            if (!event.relatedTarget || event.relatedTarget.classList.contains('btn-primary')) {
+                resetPropertyForm();
+            }
+        });
     }
-    
-    // Obtém as propriedades do localStorage
-    const propertiesRegistry = JSON.parse(localStorage.getItem('propertiesRegistry')) || {};
-    
-    // Se for uma nova propriedade, gera um ID único
-    const isNewProperty = !propertyId;
-    const id = isNewProperty ? generatePropertyId() : propertyId;
-    
-    // Atualiza ou adiciona a propriedade
-    propertiesRegistry[id] = {
-        name: propertyName,
-        address: propertyAddress,
-        createdAt: isNewProperty ? new Date().toISOString() : propertiesRegistry[id].createdAt,
-        updatedAt: new Date().toISOString()
-    };
-    
-    // Salva no localStorage
-    localStorage.setItem('propertiesRegistry', JSON.stringify(propertiesRegistry));
-    
-    // Inicializa dados da propriedade se for nova
-    if (isNewProperty) {
-        const propertiesData = JSON.parse(localStorage.getItem('propertiesData')) || {};
-        propertiesData[id] = {
-            transactions: []
-        };
-        localStorage.setItem('propertiesData', JSON.stringify(propertiesData));
-    }
-    
-    // Fecha o modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('addPropertyModal'));
-    modal.hide();
-    
-    // Recarrega as propriedades
-    loadProperties();
-    
-    // Atualiza o menu lateral
-    updateSidebar();
-    
-    // Atualiza os menus laterais em todas as páginas abertas
-    updateAllSidebars();
-    
-    alert(`Propriedade ${isNewProperty ? 'adicionada' : 'atualizada'} com sucesso!`);
-}
-
-function editProperty(id) {
-    // Obtém as propriedades do localStorage
-    const propertiesRegistry = JSON.parse(localStorage.getItem('propertiesRegistry')) || {};
-    
-    // Verifica se a propriedade existe
-    if (!propertiesRegistry[id]) {
-        alert('Propriedade não encontrada.');
-        return;
-    }
-    
-    // Preenche o formulário com os dados da propriedade
-    document.getElementById('propertyId').value = id;
-    document.getElementById('propertyName').value = propertiesRegistry[id].name;
-    document.getElementById('propertyAddress').value = propertiesRegistry[id].address || '';
-    
-    // Atualiza o título do modal
-    document.getElementById('addPropertyModalLabel').textContent = 'Editar Propriedade';
-    
-    // Abre o modal
-    const modal = new bootstrap.Modal(document.getElementById('addPropertyModal'));
-    modal.show();
-}
-
-function deleteProperty(id) {
-    // Obtém as propriedades do localStorage
-    const propertiesRegistry = JSON.parse(localStorage.getItem('propertiesRegistry')) || {};
-    
-    // Verifica se a propriedade existe
-    if (!propertiesRegistry[id]) {
-        alert('Propriedade não encontrada.');
-        return;
-    }
-    
-    // Atualiza o modal de confirmação
-    document.getElementById('deletePropertyName').textContent = propertiesRegistry[id].name;
-    
-    // Armazena o ID para uso na função de confirmação
-    window.propertyToDelete = id;
-    
-    // Abre o modal de confirmação
-    const modal = new bootstrap.Modal(document.getElementById('deletePropertyModal'));
-    modal.show();
-}
-
-function confirmDeleteProperty() {
-    const id = window.propertyToDelete;
-    
-    if (!id) {
-        alert('Erro ao excluir propriedade.');
-        return;
-    }
-    
-    // Obtém as propriedades do localStorage
-    const propertiesRegistry = JSON.parse(localStorage.getItem('propertiesRegistry')) || {};
-    const propertiesData = JSON.parse(localStorage.getItem('propertiesData')) || {};
-    
-    // Remove a propriedade
-    delete propertiesRegistry[id];
-    delete propertiesData[id];
-    
-    // Salva no localStorage
-    localStorage.setItem('propertiesRegistry', JSON.stringify(propertiesRegistry));
-    localStorage.setItem('propertiesData', JSON.stringify(propertiesData));
-    
-    // Fecha o modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('deletePropertyModal'));
-    modal.hide();
-    
-    // Limpa a referência
-    window.propertyToDelete = null;
-    
-    // Recarrega as propriedades
-    loadProperties();
-    
-    // Atualiza o menu lateral
-    updateSidebar();
-    
-    // Atualiza os menus laterais em todas as páginas abertas
-    updateAllSidebars();
-    
-    // Atualiza dados do dashboard
-    updateDashboardData(propertiesData);
-    
-    alert('Propriedade excluída com sucesso!');
-}
-
-function generatePropertyId() {
-    // Gera um ID único baseado em timestamp + número aleatório
-    return `property_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 }
 
 function resetPropertyForm() {
@@ -256,92 +131,157 @@ function resetPropertyForm() {
     document.getElementById('addPropertyModalLabel').textContent = 'Nova Propriedade';
 }
 
-function updateAllSidebars() {
-    // Esta função emite um evento que será capturado por outras páginas
-    // Para atualizar o menu lateral em tempo real
+async function saveProperty() {
+    // Obtém os valores do formulário
+    const propertyId = document.getElementById('propertyId').value;
+    const propertyName = document.getElementById('propertyName').value.trim();
+    const propertyAddress = document.getElementById('propertyAddress').value.trim();
     
-    // Em uma aplicação real, isso seria feito com outras técnicas
-    // Como webhooks ou websockets
+    // Validação básica
+    if (!propertyName) {
+        alert('Por favor, informe o nome da propriedade.');
+        return;
+    }
     
-    // Para nossa aplicação simples, vamos usar localStorage como "mensageiro"
-    localStorage.setItem('sidebarUpdateTimestamp', Date.now().toString());
+    try {
+        const propertyData = {
+            name: propertyName,
+            address: propertyAddress || ''
+        };
+        
+        if (propertyId) {
+            // Atualiza uma propriedade existente
+            await databases.updateDocument(
+                DATABASE_ID,
+                PROPERTIES_COLLECTION_ID,
+                propertyId,
+                propertyData
+            );
+        } else {
+            // Cria uma nova propriedade
+            await databases.createDocument(
+                DATABASE_ID,
+                PROPERTIES_COLLECTION_ID,
+                'unique()',
+                propertyData
+            );
+        }
+        
+        // Fecha o modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addPropertyModal'));
+        modal.hide();
+        
+        // Recarrega as propriedades
+        loadProperties();
+        
+        // Avisa ao usuário
+        alert(`Propriedade ${propertyId ? 'atualizada' : 'adicionada'} com sucesso!`);
+    } catch (error) {
+        console.error('Erro ao salvar propriedade:', error);
+        alert('Erro ao salvar propriedade. Por favor, tente novamente.');
+    }
+}
+
+async function editProperty(id) {
+    try {
+        // Busca a propriedade no banco de dados
+        const property = await databases.getDocument(
+            DATABASE_ID,
+            PROPERTIES_COLLECTION_ID,
+            id
+        );
+        
+        // Preenche o formulário com os dados da propriedade
+        document.getElementById('propertyId').value = property.$id;
+        document.getElementById('propertyName').value = property.name;
+        document.getElementById('propertyAddress').value = property.address || '';
+        
+        // Atualiza o título do modal
+        document.getElementById('addPropertyModalLabel').textContent = 'Editar Propriedade';
+        
+        // Abre o modal
+        const modal = new bootstrap.Modal(document.getElementById('addPropertyModal'));
+        modal.show();
+    } catch (error) {
+        console.error('Erro ao carregar dados da propriedade:', error);
+        alert('Erro ao carregar dados da propriedade. Por favor, tente novamente.');
+    }
+}
+
+function deleteProperty(id) {
+    // Abre modal de confirmação
+    const modal = new bootstrap.Modal(document.getElementById('deletePropertyModal'));
+    
+    // Armazena o ID para uso na função de confirmação
+    window.propertyToDelete = id;
+    
+    // Atualiza o modal de confirmação
+    try {
+        databases.getDocument(
+            DATABASE_ID,
+            PROPERTIES_COLLECTION_ID,
+            id
+        ).then(property => {
+            document.getElementById('deletePropertyName').textContent = property.name;
+            modal.show();
+        });
+    } catch (error) {
+        console.error('Erro ao buscar nome da propriedade:', error);
+        document.getElementById('deletePropertyName').textContent = 'selecionada';
+        modal.show();
+    }
+}
+
+async function confirmDeleteProperty() {
+    const id = window.propertyToDelete;
+    
+    if (!id) {
+        alert('Erro ao excluir propriedade.');
+        return;
+    }
+    
+    try {
+        // Exclui a propriedade
+        await databases.deleteDocument(
+            DATABASE_ID,
+            PROPERTIES_COLLECTION_ID,
+            id
+        );
+        
+        // Também exclui todas as transações desta propriedade
+        const transactions = await databases.listDocuments(
+            DATABASE_ID,
+            TRANSACTIONS_COLLECTION_ID,
+            [Appwrite.Query.equal('propertyId', id)]
+        );
+        
+        // Exclui cada transação individualmente
+        for (const transaction of transactions.documents) {
+            await databases.deleteDocument(
+                DATABASE_ID,
+                TRANSACTIONS_COLLECTION_ID,
+                transaction.$id
+            );
+        }
+        
+        // Fecha o modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('deletePropertyModal'));
+        modal.hide();
+        
+        // Limpa a referência
+        window.propertyToDelete = null;
+        
+        // Recarrega as propriedades
+        loadProperties();
+        
+        // Avisa ao usuário
+        alert('Propriedade excluída com sucesso!');
+    } catch (error) {
+        console.error('Erro ao excluir propriedade:', error);
+        alert('Erro ao excluir propriedade. Por favor, tente novamente.');
+    }
 }
 
 function showReports() {
     alert('Funcionalidade de Relatórios em desenvolvimento.');
-}
-
-// Adiciona evento para resetar o formulário quando o modal for aberto
-document.getElementById('addPropertyModal').addEventListener('show.bs.modal', function (event) {
-    // Se for um novo cadastro, limpa o formulário
-    if (!event.relatedTarget || event.relatedTarget.tagName === 'BUTTON') {
-        resetPropertyForm();
-    }
-});
-
-// Atualiza o dashboard com os dados das propriedades
-function updateDashboardData(propertiesData) {
-    // Extrai todas as transações de todas as propriedades
-    const allTransactions = [];
-    Object.values(propertiesData).forEach(property => {
-        if (property.transactions) {
-            allTransactions.push(...property.transactions);
-        }
-    });
-    
-    // Agrupa transações por período
-    const transactionsByPeriod = {};
-    allTransactions.forEach(transaction => {
-        if (!transactionsByPeriod[transaction.period]) {
-            transactionsByPeriod[transaction.period] = {
-                income: 0,
-                expenses: 0,
-                result: 0
-            };
-        }
-        
-        transactionsByPeriod[transaction.period].income += transaction.totalIncome;
-        transactionsByPeriod[transaction.period].expenses += transaction.totalExpenses;
-        transactionsByPeriod[transaction.period].result += transaction.result;
-    });
-    
-    // Converte para array e ordena por período
-    const periodData = Object.entries(transactionsByPeriod).map(([period, data]) => ({
-        period,
-        ...data
-    })).sort((a, b) => {
-        // Converte período para um formato comparável (assume MM/YYYY)
-        const periodToDate = (period) => {
-            const [month, year] = period.split('/');
-            return new Date(parseInt(year), parseInt(month) - 1);
-        };
-        
-        const dateA = periodToDate(a.period);
-        const dateB = periodToDate(b.period);
-        
-        return dateA - dateB; // Ordem cronológica para o gráfico
-    });
-    
-    // Calcula totais gerais para o dashboard
-    const dashboardTotals = {
-        totalIncome: Object.values(propertiesData).reduce((sum, p) => sum + (p.metrics?.totalIncome || 0), 0),
-        totalExpenses: Object.values(propertiesData).reduce((sum, p) => sum + (p.metrics?.totalExpenses || 0), 0),
-        totalResult: Object.values(propertiesData).reduce((sum, p) => sum + (p.metrics?.result || 0), 0)
-    };
-    
-    // Calcula distribuição de receitas
-    const incomeDistribution = {
-        airbnb: allTransactions.reduce((sum, t) => sum + (t.airbnb || 0), 0),
-        booking: allTransactions.reduce((sum, t) => sum + (t.booking || 0), 0),
-        direct: allTransactions.reduce((sum, t) => sum + (t.direct || 0), 0)
-    };
-    
-    // Salva dados do dashboard
-    const dashboardData = {
-        totals: dashboardTotals,
-        periodData,
-        incomeDistribution
-    };
-    
-    localStorage.setItem('dashboardData', JSON.stringify(dashboardData));
 }
