@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Propriedade - FlowBnb</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/property.css">
+    <link rel="icon" href="../assets/img/favicon.png" type="image/x-icon">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar - Mesma estrutura do dashboard -->
+            <div class="col-md-3 col-lg-2 sidebar p-0">
+                <div class="d-flex flex-column p-3">
+                    <a href="#" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none">
+                        <img src="../assets/img/logo.png" alt="FlowBnb Logo" class="logo-small">
+                    </a>
+                    <hr>
+                    <!-- Substituir em todas as páginas -->
+                    <ul class="nav nav-pills flex-column mb-auto">
+                        <li class="nav-item">
+                            <a href="dashboard.html" class="nav-link">
+                                <i class="bi bi-speedometer2 me-2"></i>
+                                Dashboard
+                            </a>
+                        </li>
+                        <div id="propertyLinks">
+                            <!-- Links de propriedades serão adicionados dinamicamente -->
+                        </div>
+                        <li>
+                            <a href="#" class="nav-link" onclick="showReports()">
+                                <i class="bi bi-file-earmark-bar-graph me-2"></i>
+                                Relatórios
+                            </a>
+                        </li>
+                        <li>
+                            <a href="import.html" class="nav-link">
+                                <i class="bi bi-upload me-2"></i>
+                                Importar Dados
+                            </a>
+                        </li>
+                        <li>
+                            <a href="properties.html" class="nav-link">
+                                <i class="bi bi-houses me-2"></i>
+                                Gerenciar Propriedades
+                            </a>
+                        </li>
+                    </ul>
+                    <hr>
+                    <div class="dropdown">
+                        <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle me-2"></i>
+                            <span id="userName">Usuário</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="dropdownUser1">
+                            <li><a class="dropdown-item" href="#" onclick="logout()">Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main content -->
+            <div class="col-md-9 col-lg-10 main-content">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2" id="propertyTitle">Apartamento</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <button type="button" class="btn btn-sm btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addTransactionModal">
+                            <i class="bi bi-plus-circle me-1"></i> Nova Transação
+                        </button>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="periodDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-calendar"></i>
+                                Período
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="periodDropdown">
+                                <li><a class="dropdown-item" href="#" onclick="changePropertyPeriod('month')">Este Mês</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="changePropertyPeriod('quarter')">Último Trimestre</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="changePropertyPeriod('year')">Este Ano</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="changePropertyPeriod('all')">Todo o Período</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Property Summary Cards -->
+                <div class="row">
+                    <div class="col-md-3 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">Receita</h5>
+                                <h2 class="card-text text-income">R$ <span id="propertyIncome">0,00</span></h2>
+                                <p class="card-text"><small class="text-muted">Últimos 30 dias</small></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-4">
+                        <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Despesas</h5>
+                            <h2 class="card-text text-expense">R$ <span id="propertyExpenses">0,00</span></h2>
+                            <p class="card-text"><small class="text-muted">Últimos 30 dias</small></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Resultado</h5>
+                            <h2 class="card-text">R$ <span id="propertyResult">0,00</span></h2>
+                            <p class="card-text"><small class="text-muted">Últimos 30 dias</small></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Rentabilidade</h5>
+                            <h2 class="card-text"><span id="propertyProfitability">0</span>%</h2>
+                            <p class="card-text"><small class="text-muted">Últimos 30 dias</small></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Evolução Mensal</h5>
+                            <canvas id="propertyMonthlyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Fontes de Receita</h5>
+                            <canvas id="propertyIncomeSourcesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transaction Table -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Transações</h5>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Período</th>
+                                    <th>Airbnb</th>
+                                    <th>Booking</th>
+                                    <th>Diretas</th>
+                                    <th>Condomínio</th>
+                                    <th>IPTU</th>
+                                    <th>Luz</th>
+                                    <th>Internet</th>
+                                    <th>Plataformas</th>
+                                    <th>Resultado</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionsTable">
+                                <!-- Dados serão preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para adicionar/editar transação -->
+<div class="modal fade" id="addTransactionModal" tabindex="-1" aria-labelledby="addTransactionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addTransactionModalLabel">Gerenciar Transação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="transactionForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="transactionPeriod" class="form-label">Período</label>
+                            <input type="month" class="form-control" id="transactionPeriod" required>
+                        </div>
+                    </div>
+                    <h6 class="mb-3">Receitas</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="incomeAirbnb" class="form-label">Airbnb</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="incomeAirbnb" min="0" step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="incomeBooking" class="form-label">Booking</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="incomeBooking" min="0" step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="incomeDirect" class="form-label">Diretas</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="incomeDirect" min="0" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                    <h6 class="mb-3">Despesas</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="expenseCondominium" class="form-label">Condomínio</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="expenseCondominium" min="0" step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="expenseIptu" class="form-label">IPTU</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="expenseIptu" min="0" step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="expenseElectricity" class="form-label">Luz</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="expenseElectricity" min="0" step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="expenseInternet" class="form-label">Internet</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="expenseInternet" min="0" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="expensePlatforms" class="form-label">Plataformas</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="expensePlatforms" min="0" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveTransaction()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/property.js"></script>
+    

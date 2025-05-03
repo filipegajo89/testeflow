@@ -1,0 +1,32 @@
+/* Estilos específicos para a página de propriedade */
+
+.logo-small {
+    max-width: 150px;
+    height: auto;
+}
+
+.table th, .table td {
+    white-space: nowrap;
+}
+
+.text-income {
+    color: var(--green-income);
+}
+
+.text-expense {
+    color: var(--red-expenses);
+}
+
+canvas {
+    min-height: 300px;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+@media (max-width: 767.98px) {
+    .card {
+        margin-bottom: 1rem;
+    }
+}

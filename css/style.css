@@ -1,0 +1,159 @@
+:root {
+    --primary-color: #00AB67; /* Verde da logo */
+    --secondary-color: #0C3C60; /* Azul marinho da logo */
+    --light-bg: #f8f9fa;
+    --dark-text: #343a40;
+    --red-expenses: #ff6b6b;
+    --green-income: #51cf66;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: var(--light-bg);
+    color: var(--dark-text);
+}
+
+.logo {
+    max-width: 250px;
+    height: auto;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #009159;
+    border-color: #009159;
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+.btn-secondary:hover {
+    background-color: #0a2e4a;
+    border-color: #0a2e4a;
+}
+
+.card {
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.text-income {
+    color: var(--green-income);
+}
+
+.text-expense {
+    color: var(--red-expenses);
+}
+
+/* Estilos para o Dashboard */
+.sidebar {
+    background-color: white;
+    color: var(--secondary-color);
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-right: 1px solid #e9ecef;
+    padding-top: 0.5rem;
+    overflow-y: auto; /* Adicionar scroll quando necessário */
+}
+
+/* Ajustar espaçamento do menu */
+.nav-pills {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+/* Garantir que todos os itens do menu sejam visíveis */
+.nav-pills li {
+    width: 100%;
+    margin-bottom: 0.25rem;
+    display: block; /* Garantir que os itens sejam sempre exibidos */
+}
+
+/* Ajuste para o logo em todas as páginas */
+.logo-small {
+    max-width: 150px;
+    height: auto;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+/* Estilos de navegação consistentes */
+.nav-link {
+    color: var(--secondary-color);
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    margin-bottom: 0.25rem;
+    opacity: 0.8;
+    display: flex; /* Para alinhar o ícone e o texto */
+    align-items: center;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+    background-color: rgba(0, 171, 103, 0.1);
+    color: var(--secondary-color);
+    opacity: 1;
+}
+
+.nav-link.active {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    opacity: 1;
+    font-weight: 500;
+}
+
+/* Ajustar ícones do menu */
+.nav-link i {
+    margin-right: 0.75rem;
+    font-size: 1.1rem;
+}
+
+/* Adicionar indicador visual para facilitar navegação */
+.nav-link.active::before {
+    content: "";
+    width: 4px;
+    height: 100%;
+    background-color: var(--primary-color);
+    position: absolute;
+    left: 0;
+    top: 0;
+    border-radius: 0 2px 2px 0;
+}
+
+/* Estilizar os grupos de itens */
+.sidebar-heading {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.5rem 1rem;
+    color: #6c757d;
+    font-weight: 600;
+    margin-top: 1rem;
+}
+
+/* Ajustes para dispositivos móveis */
+@media (max-width: 767.98px) {
+    .sidebar {
+        height: auto;
+        position: relative;
+    }
+}
+
+/* Ajustar dropdown do usuário */
+.sidebar .dropdown-toggle {
+    color: var(--secondary-color);
+}
+
+.main-content {
+    padding: 20px;
+}

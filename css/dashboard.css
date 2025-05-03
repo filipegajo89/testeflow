@@ -1,0 +1,53 @@
+/* Estilos específicos para a página de dashboard */
+
+.logo-small {
+    max-width: 150px;
+    height: auto;
+}
+
+.sidebar {
+    height: 100vh;
+    position: sticky;
+    top: 0;
+}
+
+.nav-link {
+    color: white;
+    opacity: 0.8;
+}
+
+.nav-link:hover {
+    opacity: 1;
+}
+
+.nav-link.active {
+    background-color: var(--primary-color) !important;
+    opacity: 1;
+}
+
+.nav-link.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Adicionar regra para conter o gráfico */
+.card .card-body {
+    max-height: 400px;
+    overflow: hidden;
+}
+
+canvas {
+    min-height: 250px;
+    max-height: 350px; /* Adicionar altura máxima */
+}
+
+@media (max-width: 767.98px) {
+    .sidebar {
+        position: relative;
+        height: auto;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+    }
+}
