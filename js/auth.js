@@ -1,3 +1,4 @@
+// js/auth.js
 document.addEventListener('DOMContentLoaded', function() {
     // Verifica se o usuário já está logado
     checkLoginStatus();
@@ -7,19 +8,29 @@ document.addEventListener('DOMContentLoaded', function() {
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
     }
+
+    // Adiciona evento ao link de recuperação de senha
+    const forgotPasswordLink = document.querySelector('[data-bs-target="#forgotPasswordModal"]');
+    if (forgotPasswordLink) {
+        const forgotPasswordBtn = document.querySelector('#forgotPasswordModal .btn-primary');
+        forgotPasswordBtn.addEventListener('click', handlePasswordRecovery);
+    }
 });
 
-function checkLoginStatus() {
-    const isLoggedIn = localStorage.getItem('isLoggedIn');
-    
-    // Se estiver na página de login e já estiver logado, redireciona para o dashboard
-    if (isLoggedIn === 'true' && window.location.pathname.includes('index.html')) {
-        window.location.href = 'pages/dashboard.html';
-    }
-    
-    // Se estiver em outra página e não estiver logado, redireciona para o login
-    if (isLoggedIn !== 'true' && !window.location.pathname.includes('index.html')) {
-        window.location.href = '../index.html';
+async function checkLoginStatus() {
+    try {
+        // Verifica se há uma sessão ativa no Appwrite
+        const user = await account.get();
+        
+        // Se estiver na página de login e já estiver logado, redireciona para o dashboard
+        if (window.location.pathname.includes('index.html')) {
+            window.location.href = 'pages/dashboard.html';
+        }
+    } catch (error) {
+        // Se não estiver logado ou a sessão expirou
+        if (!window.location.pathname.includes('index.html')) {
+            window.location.href = window.location.pathname.includes('/pages/') ? '../index.html' : 'index.html';
+        }
     }
 }
 
@@ -31,7 +42,7 @@ async function handleLogin(event) {
     
     try {
         // Criar uma sessão (login) no Appwrite
-        const session = await account.createEmailSession(email, password);
+        await account.createEmailSession(email, password);
         
         // Buscar dados do usuário
         const user = await account.get();
@@ -46,6 +57,7 @@ async function handleLogin(event) {
         if (userData.documents.length > 0) {
             const userInfo = userData.documents[0];
             
+            // Salva informações básicas no localStorage para uso na aplicação
             localStorage.setItem('userName', userInfo.name);
             localStorage.setItem('userRole', userInfo.role);
             
@@ -53,161 +65,108 @@ async function handleLogin(event) {
                 localStorage.setItem('propertyAccess', userInfo.propertyAccess);
             }
             
+            // Redireciona para o dashboard
             window.location.href = 'pages/dashboard.html';
         } else {
             throw new Error('Usuário não encontrado.');
         }
     } catch (error) {
         console.error('Erro ao fazer login:', error);
-        alert('E-mail ou senha incorretos!');
+        
+        // Exibe mensagem de erro
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'alert alert-danger mt-3';
+        errorMessage.textContent = 'E-mail ou senha incorretos!';
+        
+        const form = document.getElementById('loginForm');
+        form.appendChild(errorMessage);
+        
+        // Remove a mensagem após 3 segundos
+        setTimeout(() => {
+            errorMessage.remove();
+        }, 3000);
     }
 }
 
-function logout() {
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('propertyAccess');
-    window.location.href = '../index.html';
-}
-
-// Adicionar isso no início do arquivo, após as funções existentes
-
-// Dados dos usuários para o exemplo
-const users = [
-    {
-        email: 'admin@flowbnb.com',
-        password: 'admin123',
-        role: 'admin',
-        name: 'Administrador',
-        securityQuestion: 'pet',
-        securityAnswer: 'rex'
-    },
-    {
-        email: 'coproprietario@flowbnb.com',
-        password: 'coprop123',
-        role: 'coproprietario',
-        name: 'Co-proprietário',
-        propertyAccess: 'property2',
-        securityQuestion: 'city',
-        securityAnswer: 'rio'
-    }
-];
-
-// Armazena os usuários no localStorage para persistência
-function initializeUsers() {
-    if (!localStorage.getItem('users')) {
-        localStorage.setItem('users', JSON.stringify(users));
-    }
-}
-
-// Chama a função para inicializar os usuários quando a página carrega
-document.addEventListener('DOMContentLoaded', function() {
-    initializeUsers();
-    // Outras funções existentes de inicialização...
-});
-
-// Função de recuperação de senha
-function recoverPassword() {
+async function handlePasswordRecovery() {
     const email = document.getElementById('recoveryEmail').value;
-    const question = document.getElementById('securityQuestion').value;
-    const answer = document.getElementById('securityAnswer').value.toLowerCase();
     
-    const usersData = JSON.parse(localStorage.getItem('users')) || users;
-    const user = usersData.find(u => u.email === email);
-    
-    const resultElement = document.getElementById('recoveryResult');
-    resultElement.classList.remove('d-none', 'alert-success', 'alert-danger');
-    
-    if (!user) {
-        resultElement.classList.add('alert-danger');
-        resultElement.textContent = 'E-mail não encontrado.';
-        resultElement.classList.remove('d-none');
-        return;
-    }
-    
-    if (user.securityQuestion === question && user.securityAnswer === answer.toLowerCase()) {
-        // Gera uma nova senha temporária
-        const tempPassword = generateTemporaryPassword();
+    try {
+        // Envia e-mail de recuperação de senha do Appwrite
+        await account.createRecovery(
+            email,
+            window.location.origin + '/reset-password.html'
+        );
         
-        // Atualiza a senha do usuário
-        user.password = tempPassword;
-        localStorage.setItem('users', JSON.stringify(usersData));
-        
+        // Exibe mensagem de sucesso
+        const resultElement = document.getElementById('recoveryResult');
+        resultElement.classList.remove('d-none', 'alert-danger');
         resultElement.classList.add('alert-success');
-        resultElement.innerHTML = `Senha temporária gerada: <strong>${tempPassword}</strong><br>
-                                   Por favor, anote esta senha e use-a para fazer login.`;
-        resultElement.classList.remove('d-none');
-    } else {
-        resultElement.classList.add('alert-danger');
-        resultElement.textContent = 'Pergunta de segurança ou resposta incorreta.';
-        resultElement.classList.remove('d-none');
-    }
-}
-
-// Gera uma senha temporária aleatória
-function generateTemporaryPassword() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let password = '';
-    for (let i = 0; i < 8; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
-}
-
-// Modificar a função handleLogin para usar os usuários do localStorage
-function handleLogin(event) {
-    event.preventDefault();
-    
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    
-    const usersData = JSON.parse(localStorage.getItem('users')) || users;
-    const user = usersData.find(u => u.email === email && u.password === password);
-    
-    if (user) {
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('userRole', user.role);
-        localStorage.setItem('userName', user.name);
+        resultElement.textContent = 'E-mail de recuperação enviado. Verifique sua caixa de entrada.';
+    } catch (error) {
+        console.error('Erro na recuperação de senha:', error);
         
-        if (user.propertyAccess) {
-            localStorage.setItem('propertyAccess', user.propertyAccess);
+        // Exibe mensagem de erro
+        const resultElement = document.getElementById('recoveryResult');
+        resultElement.classList.remove('d-none', 'alert-success');
+        resultElement.classList.add('alert-danger');
+        resultElement.textContent = 'Erro ao enviar e-mail de recuperação. Verifique se o e-mail está correto.';
+    }
+}
+
+async function logout() {
+    try {
+        // Excluir a sessão atual no Appwrite
+        await account.deleteSession('current');
+        
+        // Limpa as informações do localStorage
+        localStorage.removeItem('userName');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('propertyAccess');
+        
+        // Redireciona para a página de login
+        window.location.href = window.location.pathname.includes('/pages/') ? '../index.html' : 'index.html';
+    } catch (error) {
+        console.error('Erro ao fazer logout:', error);
+    }
+}
+
+// Função para atualizar o menu lateral com as propriedades
+async function updateSidebarMenu() {
+    // Verifica se o elemento do menu existe
+    const propertyLinks = document.getElementById('propertyLinks');
+    if (!propertyLinks) return;
+    
+    try {
+        // Busca as propriedades no banco de dados
+        const properties = await databases.listDocuments(
+            DATABASE_ID,
+            PROPERTIES_COLLECTION_ID
+        );
+        
+        // Limpa os links existentes
+        propertyLinks.innerHTML = '';
+        
+        // Obtém o ID da propriedade atual da URL (se estiver na página de propriedade)
+        let currentPropertyId = '';
+        if (window.location.pathname.includes('property.html')) {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentPropertyId = urlParams.get('id') || '';
         }
         
-        window.location.href = 'pages/dashboard.html';
-    } else {
-        alert('E-mail ou senha incorretos!');
-    }
-}
-
-// Adicionar este código ao final do arquivo js/auth.js
-
-// Função para atualizar o menu lateral com as propriedades
-function updateSidebarMenu() {
-    // Verifica se o elemento do menu existe
-    const propertyLinks = document.getElementById('propertyLinks');
-    if (!propertyLinks) return;
-    
-    // Obtém as propriedades do localStorage
-    const propertiesRegistry = JSON.parse(localStorage.getItem('propertiesRegistry')) || {};
-    
-    // Limpa os links existentes
-    propertyLinks.innerHTML = '';
-    
-    // Se não houver propriedades cadastradas, adiciona as padrões
-    if (Object.keys(propertiesRegistry).length === 0) {
-        // Propriedades padrão
-        const defaultProperties = {
-            'property1': { name: 'Apartamento 1' },
-            'property2': { name: 'Apartamento 2' },
-            'property3': { name: 'Apartamento 3' }
-        };
+        // Se não houver propriedades, exibe mensagem
+        if (properties.documents.length === 0) {
+            propertyLinks.innerHTML = '<p class="text-muted small px-3">Nenhuma propriedade encontrada</p>';
+            return;
+        }
         
-        // Para cada propriedade padrão
-        Object.entries(defaultProperties).forEach(([id, property]) => {
+        // Adiciona cada propriedade ao menu
+        properties.documents.forEach(property => {
             const listItem = document.createElement('li');
+            const isActive = property.$id === currentPropertyId;
+            
             listItem.innerHTML = `
-                <a href="property.html?id=${id}" class="nav-link">
+                <a href="${getProperPath()}property.html?id=${property.$id}" class="nav-link ${isActive ? 'active' : ''}">
                     <i class="bi bi-house me-2"></i>
                     ${property.name}
                 </a>
@@ -215,99 +174,10 @@ function updateSidebarMenu() {
             
             propertyLinks.appendChild(listItem);
         });
-    } else {
-        // Adiciona as propriedades cadastradas
-        Object.entries(propertiesRegistry).forEach(([id, property]) => {
-            const listItem = document.createElement('li');
-            listItem.innerHTML = `
-                <a href="property.html?id=${id}" class="nav-link">
-                    <i class="bi bi-house me-2"></i>
-                    ${property.name}
-                </a>
-            `;
-            
-            propertyLinks.appendChild(listItem);
-        });
+    } catch (error) {
+        console.error('Erro ao carregar propriedades:', error);
+        propertyLinks.innerHTML = '<p class="text-danger small px-3">Erro ao carregar propriedades</p>';
     }
-}
-
-// Monitora alterações no localStorage para atualizar o menu
-window.addEventListener('storage', function(e) {
-    if (e.key === 'sidebarUpdateTimestamp' || e.key === 'propertiesRegistry') {
-        updateSidebarMenu();
-    }
-});
-
-// Atualiza o menu lateral quando a página carregar
-document.addEventListener('DOMContentLoaded', function() {
-    updateSidebarMenu();
-});
-
-// Função para atualizar o menu lateral com as propriedades
-function updateSidebarMenu() {
-    // Verifica se o elemento do menu existe
-    const propertyLinks = document.getElementById('propertyLinks');
-    if (!propertyLinks) return;
-    
-    // Obtém as propriedades do localStorage
-    const propertiesRegistry = JSON.parse(localStorage.getItem('propertiesRegistry')) || {};
-    
-    // Limpa os links existentes
-    propertyLinks.innerHTML = '';
-    
-    // Obtém o ID da propriedade atual da URL (se estiver na página de propriedade)
-    let currentPropertyId = '';
-    if (window.location.pathname.includes('property.html')) {
-        const urlParams = new URLSearchParams(window.location.search);
-        currentPropertyId = urlParams.get('id') || '';
-    }
-    
-    // Se não houver propriedades cadastradas, adiciona as padrões
-    if (Object.keys(propertiesRegistry).length === 0) {
-        // Propriedades padrão
-        const defaultProperties = {
-            'property1': { name: 'Apartamento 1' },
-            'property2': { name: 'Apartamento 2' },
-            'property3': { name: 'Apartamento 3' }
-        };
-        
-        // Para cada propriedade padrão
-        Object.entries(defaultProperties).forEach(([id, property]) => {
-            const listItem = document.createElement('li');
-            
-            // Verifica se esta é a propriedade atual para adicionar a classe active
-            const isActive = id === currentPropertyId;
-            
-            listItem.innerHTML = `
-                <a href="${getProperPath()}property.html?id=${id}" class="nav-link ${isActive ? 'active' : ''}">
-                    <i class="bi bi-house"></i>
-                    ${property.name}
-                </a>
-            `;
-            
-            propertyLinks.appendChild(listItem);
-        });
-    } else {
-        // Adiciona as propriedades cadastradas
-        Object.entries(propertiesRegistry).forEach(([id, property]) => {
-            const listItem = document.createElement('li');
-            
-            // Verifica se esta é a propriedade atual para adicionar a classe active
-            const isActive = id === currentPropertyId;
-            
-            listItem.innerHTML = `
-                <a href="${getProperPath()}property.html?id=${id}" class="nav-link ${isActive ? 'active' : ''}">
-                    <i class="bi bi-house"></i>
-                    ${property.name}
-                </a>
-            `;
-            
-            propertyLinks.appendChild(listItem);
-        });
-    }
-    
-    // Também destaca o item de menu atual com base na página
-    highlightCurrentPage();
 }
 
 // Função para obter o caminho correto (para links relativos)
@@ -337,9 +207,6 @@ function highlightCurrentPage() {
     if (currentPage === '' || currentPage === 'index.html' || currentPage === 'dashboard.html') {
         const dashboardLink = document.querySelector('a[href*="dashboard.html"]');
         if (dashboardLink) dashboardLink.classList.add('active');
-    } else if (currentPage === 'reports.html') {
-        const reportsLink = document.querySelector('a[href*="reports.html"]');
-        if (reportsLink) reportsLink.classList.add('active');
     } else if (currentPage === 'import.html') {
         const importLink = document.querySelector('a[href*="import.html"]');
         if (importLink) importLink.classList.add('active');
@@ -349,14 +216,8 @@ function highlightCurrentPage() {
     }
 }
 
-// Chama a função quando a página carregar
+// Atualiza o menu lateral quando a página carregar
 document.addEventListener('DOMContentLoaded', function() {
     updateSidebarMenu();
-});
-
-// Monitora alterações no localStorage para atualizar o menu
-window.addEventListener('storage', function(e) {
-    if (e.key === 'sidebarUpdateTimestamp' || e.key === 'propertiesRegistry') {
-        updateSidebarMenu();
-    }
+    highlightCurrentPage();
 });
