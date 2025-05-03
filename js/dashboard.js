@@ -1,86 +1,234 @@
+// js/dashboard.js
 document.addEventListener('DOMContentLoaded', function() {
     // Atualiza o nome do usuário na sidebar
     updateUserInfo();
     
-    // Carrega os dados de exemplo
-    loadSampleData();
-    
     // Verifica permissões do usuário
     checkUserPermissions();
     
-    // Inicializa os gráficos
-    initCharts();
+    // Carrega os dados do dashboard
+    loadDashboardData();
 });
 
-function updateUserInfo() {
-    const userName = localStorage.getItem('userName');
-    const userNameElement = document.getElementById('userName');
-    
-    if (userNameElement && userName) {
-        userNameElement.textContent = userName;
-    }
-}
-
-function checkUserPermissions() {
-    const userRole = localStorage.getItem('userRole');
-    const propertyAccess = localStorage.getItem('propertyAccess');
-    
-    // Se for co-proprietário, desativa links para propriedades que não tem acesso
-    if (userRole === 'coproprietario') {
-        const propertyLinks = document.querySelectorAll('.nav-pills .nav-link');
+async function updateUserInfo() {
+    try {
+        // Obtém as informações do usuário atual
+        const user = await account.get();
+        const userName = user.name || user.email;
         
-        propertyLinks.forEach(link => {
-            // Verifica se o link contém onclick que acessa uma propriedade
-            if (link.getAttribute('onclick') && !link.getAttribute('onclick').includes(propertyAccess)) {
-                // Se não for dashboard ou relatórios e não for a propriedade com acesso
-                if (!link.getAttribute('onclick').includes('showReports') && !link.classList.contains('active')) {
-                    link.classList.add('disabled');
-                }
-            }
-        });
+        // Atualiza o nome do usuário na interface
+        const userNameElement = document.getElementById('userName');
+        if (userNameElement) {
+            userNameElement.textContent = userName;
+        }
+    } catch (error) {
+        console.error('Erro ao obter informações do usuário:', error);
     }
 }
 
-// Modificar a função loadSampleData no arquivo js/dashboard.js
-function loadSampleData() {
-    // Tenta carregar dados do localStorage
-    const dashboardData = JSON.parse(localStorage.getItem('dashboardData'));
-    
-    // Se não houver dados no localStorage, usa os dados de exemplo
-    if (!dashboardData) {
-        // Use o código existente para carregar dados de exemplo
-        loadSampleDashboardData();
-        return;
+async function checkUserPermissions() {
+    try {
+        // Obtém o usuário atual
+        const user = await account.get();
+        
+        // Busca os detalhes do usuário no banco de dados
+        const userData = await databases.listDocuments(
+            DATABASE_ID,
+            USERS_COLLECTION_ID,
+            [Appwrite.Query.equal('userId', user.$id)]
+        );
+        
+        // Se o usuário for co-proprietário, destaca suas propriedades
+        if (userData.documents.length > 0 && userData.documents[0].role === 'coproprietario') {
+            // Destaca as propriedades permitidas
+            const allowedProperties = userData.documents[0].propertyAccess || [];
+            
+            // Desativa links para propriedades sem acesso
+            document.querySelectorAll('#propertyLinks .nav-link').forEach(link => {
+                const href = link.getAttribute('href');
+                if (href) {
+                    const url = new URL(href, window.location.origin);
+                    const propertyId = url.searchParams.get('id');
+                    
+                    if (propertyId && !allowedProperties.includes(propertyId)) {
+                        link.classList.add('disabled');
+                        link.setAttribute('aria-disabled', 'true');
+                        link.addEventListener('click', (e) => e.preventDefault());
+                    }
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao verificar permissões:', error);
     }
+}
+
+async function loadDashboardData() {
+    try {
+        // Busca todas as propriedades
+        let properties;
+        const user = await account.get();
+        const userData = await databases.listDocuments(
+            DATABASE_ID,
+            USERS_COLLECTION_ID,
+            [Appwrite.Query.equal('userId', user.$id)]
+        );
+        
+        // Se for co-proprietário, filtra apenas suas propriedades
+        if (userData.documents.length > 0 && userData.documents[0].role === 'coproprietario') {
+            const allowedProperties = userData.documents[0].propertyAccess || [];
+            
+            // Busca apenas as propriedades permitidas
+            properties = await databases.listDocuments(
+                DATABASE_ID,
+                PROPERTIES_COLLECTION_ID,
+                [Appwrite.Query.equal('$id', allowedProperties)]
+            );
+        } else {
+            // Se for admin, busca todas as propriedades
+            properties = await databases.listDocuments(
+                DATABASE_ID,
+                PROPERTIES_COLLECTION_ID
+            );
+        }
+        
+        // Obtém as transações para calcular métricas
+        let allTransactions = [];
+        
+        for (const property of properties.documents) {
+            const transactions = await databases.listDocuments(
+                DATABASE_ID,
+                TRANSACTIONS_COLLECTION_ID,
+                [Appwrite.Query.equal('propertyId', property.$id)]
+            );
+            
+            // Adiciona o nome da propriedade a cada transação
+            transactions.documents.forEach(transaction => {
+                transaction.propertyName = property.name;
+                allTransactions.push(transaction);
+            });
+        }
+        
+        // Processa os dados para o dashboard
+        const dashboardData = processDashboardData(properties.documents, allTransactions);
+        
+        // Atualiza a interface com os dados
+        updateDashboardInterface(dashboardData);
+    } catch (error) {
+        console.error('Erro ao carregar dados do dashboard:', error);
+        alert('Erro ao carregar dados do dashboard. Por favor, tente novamente.');
+    }
+}
+
+function processDashboardData(properties, transactions) {
+    // Calcula totais
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    let airbnbTotal = 0;
+    let bookingTotal = 0;
+    let directTotal = 0;
     
-    // Atualiza os valores no dashboard com os dados importados
+    // Calcular métricas por propriedade
+    const propertiesData = properties.map(property => {
+        // Filtrar transações desta propriedade
+        const propertyTransactions = transactions.filter(t => t.propertyId === property.$id);
+        
+        let income = 0;
+        let expenses = 0;
+        
+        propertyTransactions.forEach(transaction => {
+            income += transaction.totalIncome || 0;
+            expenses += transaction.totalExpenses || 0;
+        });
+        
+        const result = income - expenses;
+        const profitability = income > 0 ? (result / income) * 100 : 0;
+        
+        // Adicionar ao total geral
+        totalIncome += income;
+        totalExpenses += expenses;
+        
+        return {
+            id: property.$id,
+            name: property.name,
+            income: income,
+            expenses: expenses,
+            result: result,
+            profitability: profitability
+        };
+    });
+    
+    // Calcular distribuição de receitas por plataforma
+    transactions.forEach(transaction => {
+        airbnbTotal += transaction.airbnb || 0;
+        bookingTotal += transaction.booking || 0;
+        directTotal += transaction.direct || 0;
+    });
+    
+    // Agrupar transações por período para o gráfico
+    const periodData = {};
+    transactions.forEach(transaction => {
+        if (!periodData[transaction.period]) {
+            periodData[transaction.period] = {
+                income: 0,
+                expenses: 0
+            };
+        }
+        
+        periodData[transaction.period].income += transaction.totalIncome || 0;
+        periodData[transaction.period].expenses += transaction.totalExpenses || 0;
+    });
+    
+    // Converter para array e ordenar por data
+    const monthlyData = Object.entries(periodData).map(([period, data]) => {
+        return {
+            period: period,
+            month: convertPeriodToMonthName(period),
+            income: data.income,
+            expenses: data.expenses,
+            result: data.income - data.expenses
+        };
+    });
+    
+    // Ordenar por data
+    monthlyData.sort((a, b) => {
+        const [aMonth, aYear] = a.period.split('/');
+        const [bMonth, bYear] = b.period.split('/');
+        
+        if (aYear !== bYear) {
+            return parseInt(aYear) - parseInt(bYear);
+        }
+        
+        return parseInt(aMonth) - parseInt(bMonth);
+    });
+    
+    return {
+        propertiesList: propertiesData,
+        totals: {
+            totalIncome: totalIncome,
+            totalExpenses: totalExpenses,
+            totalResult: totalIncome - totalExpenses
+        },
+        monthlyData: monthlyData,
+        incomeBySource: {
+            airbnb: airbnbTotal,
+            booking: bookingTotal,
+            direct: directTotal
+        }
+    };
+}
+
+function updateDashboardInterface(dashboardData) {
+    // Atualiza os cards de resumo
     document.getElementById('totalIncome').textContent = formatCurrency(dashboardData.totals.totalIncome);
     document.getElementById('totalExpenses').textContent = formatCurrency(dashboardData.totals.totalExpenses);
     document.getElementById('netResult').textContent = formatCurrency(dashboardData.totals.totalResult);
     
-    // Carrega dados das propriedades
-    const allProperties = JSON.parse(localStorage.getItem('propertiesData')) || {};
-    const propertiesList = [];
-    
-    // Prepara dados das propriedades para exibição
-    Object.entries(allProperties).forEach(([id, property]) => {
-        if (property.metrics) {
-            propertiesList.push({
-                id,
-                name: getPropertyName(id),
-                income: property.metrics.totalIncome,
-                expenses: property.metrics.totalExpenses,
-                result: property.metrics.result,
-                profitability: property.metrics.profitability
-            });
-        }
-    });
-    
-    // Atualiza a tabela de propriedades
+    // Preenche a tabela de propriedades
     const tableBody = document.getElementById('propertiesSummary');
     tableBody.innerHTML = '';
     
-    propertiesList.forEach(property => {
+    dashboardData.propertiesList.forEach(property => {
         const row = document.createElement('tr');
         row.innerHTML = `
             <td><a href="property.html?id=${property.id}">${property.name}</a></td>
@@ -92,44 +240,34 @@ function loadSampleData() {
         tableBody.appendChild(row);
     });
     
-    // Armazena os dados para uso nos gráficos
-    window.dashboardData = dashboardData;
+    // Inicializa os gráficos
+    initDashboardCharts(dashboardData);
 }
 
-// Adicionar função auxiliar
-function getPropertyName(propertyId) {
-    const propertyNames = {
-        'property1': 'Apartamento 1',
-        'property2': 'Apartamento 2',
-        'property3': 'Apartamento 3'
-    };
-    
-    return propertyNames[propertyId] || 'Propriedade';
-}
-
-// Modificar a função initCharts para usar os dados novos
-function initCharts() {
-    const data = window.dashboardData;
-    
-    if (!data) return;
-    
+function initDashboardCharts(dashboardData) {
     // Gráfico de Evolução de Receitas e Despesas
     const incomeExpenseCtx = document.getElementById('incomeExpenseChart').getContext('2d');
-    new Chart(incomeExpenseCtx, {
+    
+    // Verifica se já existe um gráfico e destrói
+    if (window.incomeExpenseChart) {
+        window.incomeExpenseChart.destroy();
+    }
+    
+    window.incomeExpenseChart = new Chart(incomeExpenseCtx, {
         type: 'line',
         data: {
-            labels: data.periodData.map(item => convertPeriodToMonthName(item.period)),
+            labels: dashboardData.monthlyData.map(item => item.month),
             datasets: [
                 {
                     label: 'Receitas',
-                    data: data.periodData.map(item => item.income),
+                    data: dashboardData.monthlyData.map(item => item.income),
                     borderColor: '#51cf66',
                     backgroundColor: 'rgba(81, 207, 102, 0.2)',
                     tension: 0.1
                 },
                 {
                     label: 'Despesas',
-                    data: data.periodData.map(item => item.expenses),
+                    data: dashboardData.monthlyData.map(item => item.expenses),
                     borderColor: '#ff6b6b',
                     backgroundColor: 'rgba(255, 107, 107, 0.2)',
                     tension: 0.1
@@ -139,7 +277,6 @@ function initCharts() {
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            height: 300,
             scales: {
                 y: {
                     beginAtZero: true,
@@ -155,15 +292,21 @@ function initCharts() {
     
     // Gráfico de Pizza para Distribuição de Receitas
     const incomeSourcesCtx = document.getElementById('incomePieChart').getContext('2d');
-    new Chart(incomeSourcesCtx, {
+    
+    // Verifica se já existe um gráfico e destrói
+    if (window.incomeSourcesChart) {
+        window.incomeSourcesChart.destroy();
+    }
+    
+    window.incomeSourcesChart = new Chart(incomeSourcesCtx, {
         type: 'pie',
         data: {
             labels: ['Airbnb', 'Booking', 'Diretas'],
             datasets: [{
                 data: [
-                    data.incomeDistribution.airbnb,
-                    data.incomeDistribution.booking,
-                    data.incomeDistribution.direct
+                    dashboardData.incomeBySource.airbnb,
+                    dashboardData.incomeBySource.booking,
+                    dashboardData.incomeBySource.direct
                 ],
                 backgroundColor: [
                     '#00AB67', // Verde da logo
@@ -191,7 +334,6 @@ function initCharts() {
     });
 }
 
-// Adicionar função para converter período em nome do mês (igual à do arquivo property.js)
 function convertPeriodToMonthName(period) {
     if (!period) return '';
     
@@ -211,111 +353,12 @@ function convertPeriodToMonthName(period) {
     return period;
 }
 
-function initCharts() {
-    const data = window.dashboardData;
-    
-    if (!data) return;
-    
-    // Gráfico de Evolução de Receitas e Despesas
-    const incomeExpenseCtx = document.getElementById('incomeExpenseChart').getContext('2d');
-    new Chart(incomeExpenseCtx, {
-        type: 'line',
-        data: {
-            labels: data.monthlyData.map(item => item.month),
-            datasets: [
-                {
-                    label: 'Receitas',
-                    data: data.monthlyData.map(item => item.income),
-                    borderColor: '#51cf66',
-                    backgroundColor: 'rgba(81, 207, 102, 0.2)',
-                    tension: 0.1
-                },
-                {
-                    label: 'Despesas',
-                    data: data.monthlyData.map(item => item.expenses),
-                    borderColor: '#ff6b6b',
-                    backgroundColor: 'rgba(255, 107, 107, 0.2)',
-                    tension: 0.1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true, // Mudar para true
-            height: 300, // Definir altura fixa
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'R$ ' + value.toLocaleString('pt-BR');
-                        }
-                    }
-                }
-            }
-        }
-    });
-    
-    // Gráfico de Pizza para Distribuição de Receitas
-    const incomeSourcesCtx = document.getElementById('incomePieChart').getContext('2d');
-    new Chart(incomeSourcesCtx, {
-        type: 'pie',
-        data: {
-            labels: ['Airbnb', 'Booking', 'Diretas'],
-            datasets: [{
-                data: [
-                    data.incomeBySource.airbnb,
-                    data.incomeBySource.booking,
-                    data.incomeBySource.direct
-                ],
-                backgroundColor: [
-                    '#00AB67', // Verde da logo
-                    '#0C3C60', // Azul da logo
-                    '#ffd43b' // Amarelo para contraste
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const value = context.raw;
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((value / total) * 100).toFixed(2) + '%';
-                            return `R$ ${value.toLocaleString('pt-BR')} (${percentage})`;
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-function loadProperty(propertyId) {
-    // Em uma versão completa, aqui redirecionaria para a página da propriedade
-    // Por enquanto, apenas alertamos
-    alert(`Carregando propriedade: ${propertyId}`);
-    
-    // Na implementação real, você redirecionaria para:
-    // window.location.href = `property.html?id=${propertyId}`;
-}
-
-function showReports() {
-    // Em uma versão completa, aqui redirecionaria para a página de relatórios
-    alert('Carregando relatórios');
-    
-    // Na implementação real, você redirecionaria para:
-    // window.location.href = 'reports.html';
-}
-
 function changePeriod(period) {
-    // Em uma versão completa, aqui atualizaria os dados com base no período selecionado
-    alert(`Período alterado para: ${period}`);
+    // Armazena o período selecionado
+    localStorage.setItem('dashboardPeriod', period);
     
-    // Na implementação real, você recarregaria os dados e atualizaria os gráficos
+    // Recarrega os dados do dashboard
+    loadDashboardData();
 }
 
 function formatCurrency(value) {
