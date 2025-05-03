@@ -1,3 +1,4 @@
+// js/import.js
 document.addEventListener('DOMContentLoaded', function() {
     // Atualiza o nome do usuário na sidebar
     updateUserInfo();
@@ -5,26 +6,77 @@ document.addEventListener('DOMContentLoaded', function() {
     // Verifica permissões do usuário
     checkUserPermissions();
     
+    // Carrega as propriedades para o select
+    loadProperties();
+    
     // Inicializa o formulário de upload
     initializeUploadForm();
 });
 
-function updateUserInfo() {
-    const userName = localStorage.getItem('userName');
-    const userNameElement = document.getElementById('userName');
-    
-    if (userNameElement && userName) {
-        userNameElement.textContent = userName;
+async function updateUserInfo() {
+    try {
+        // Obtém as informações do usuário atual
+        const user = await account.get();
+        const userName = user.name || user.email;
+        
+        // Atualiza o nome do usuário na interface
+        const userNameElement = document.getElementById('userName');
+        if (userNameElement) {
+            userNameElement.textContent = userName;
+        }
+    } catch (error) {
+        console.error('Erro ao obter informações do usuário:', error);
     }
 }
 
-function checkUserPermissions() {
-    const userRole = localStorage.getItem('userRole');
-    
-    // Se não for admin, redireciona para o dashboard
-    if (userRole !== 'admin') {
-        alert('Você não tem permissão para acessar esta página.');
-        window.location.href = 'dashboard.html';
+async function checkUserPermissions() {
+    try {
+        // Obtém o usuário atual
+        const user = await account.get();
+        
+        // Busca os detalhes do usuário no banco de dados
+        const userData = await databases.listDocuments(
+            DATABASE_ID,
+            USERS_COLLECTION_ID,
+            [Appwrite.Query.equal('userId', user.$id)]
+        );
+        
+        // Se o usuário não for admin, redireciona para o dashboard
+        if (userData.documents.length > 0 && userData.documents[0].role !== 'admin') {
+            alert('Você não tem permissão para acessar esta página.');
+            window.location.href = 'dashboard.html';
+        }
+    } catch (error) {
+        console.error('Erro ao verificar permissões:', error);
+        // Se ocorrer algum erro, redireciona para a página de login
+        window.location.href = '../index.html';
+    }
+}
+
+async function loadProperties() {
+    try {
+        // Busca todas as propriedades no banco de dados
+        const properties = await databases.listDocuments(
+            DATABASE_ID,
+            PROPERTIES_COLLECTION_ID
+        );
+        
+        // Referência para o select de propriedades
+        const propertySelect = document.getElementById('propertySelect');
+        
+        // Limpa as opções existentes (mantém apenas a opção placeholder)
+        propertySelect.innerHTML = '<option value="" selected disabled>Escolha uma propriedade</option>';
+        
+        // Adiciona cada propriedade ao select
+        properties.documents.forEach(property => {
+            const option = document.createElement('option');
+            option.value = property.$id;
+            option.textContent = property.name;
+            propertySelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Erro ao carregar propriedades:', error);
+        alert('Erro ao carregar propriedades. Por favor, tente novamente.');
     }
 }
 
@@ -164,7 +216,7 @@ function displayPreview(data, headers) {
     };
 }
 
-function importData() {
+async function importData() {
     if (!window.importData) {
         alert('Nenhum dado para importar. Por favor, visualize os dados primeiro.');
         return;
@@ -174,22 +226,58 @@ function importData() {
     
     try {
         // Processa os dados para o formato do aplicativo
-        const processedData = processDataForImport(data, property);
+        const processedData = processDataForImport(data);
         
-        // Armazena os dados no localStorage
-        saveImportedData(processedData, property);
+        // Contador para acompanhar progresso
+        let importedCount = 0;
         
-        alert('Dados importados com sucesso!');
+        // Importa cada transação
+        for (const transaction of processedData) {
+            // Verifica se já existe uma transação para este período
+            const existingTransactions = await databases.listDocuments(
+                DATABASE_ID,
+                TRANSACTIONS_COLLECTION_ID,
+                [
+                    Appwrite.Query.equal('propertyId', property),
+                    Appwrite.Query.equal('period', transaction.period)
+                ]
+            );
+            
+            // Adiciona o ID da propriedade
+            transaction.propertyId = property;
+            
+            if (existingTransactions.documents.length > 0) {
+                // Atualiza a transação existente
+                await databases.updateDocument(
+                    DATABASE_ID,
+                    TRANSACTIONS_COLLECTION_ID,
+                    existingTransactions.documents[0].$id,
+                    transaction
+                );
+            } else {
+                // Cria uma nova transação
+                await databases.createDocument(
+                    DATABASE_ID,
+                    TRANSACTIONS_COLLECTION_ID,
+                    'unique()',
+                    transaction
+                );
+            }
+            
+            importedCount++;
+        }
+        
+        alert(`Importação concluída com sucesso! Foram processadas ${importedCount} transações.`);
         
         // Redireciona para a página da propriedade
         window.location.href = `property.html?id=${property}`;
     } catch (error) {
+        console.error('Erro ao importar dados:', error);
         alert('Erro ao importar dados: ' + error.message);
     }
 }
 
-// Modificação na função parseExcel e parseCSV
-function processDataForImport(data, propertyId) {
+function processDataForImport(data) {
     // Mapeia os dados da planilha para o formato do aplicativo
     return data.map(row => {
         // Arrays de possíveis nomes de colunas para cada categoria
@@ -197,7 +285,6 @@ function processDataForImport(data, propertyId) {
         const airbnbColumns = ['AIRBNB', 'RECEITA AIRBNB', 'AIRBNB RECEITA'];
         const bookingColumns = ['BOOKING', 'RECEITA BOOKING', 'BOOKING RECEITA'];
         const diretasColumns = ['DIRETAS', 'RECEITA DIRETA', 'RESERVAS DIRETAS'];
-        const receitaColumns = ['RECEITA', 'RECEITA TOTAL', 'TOTAL RECEITAS'];
         const condominioColumns = ['CONDOMÍNIO', 'CONDOMINIO', 'TAXA CONDOMÍNIO'];
         const iptuColumns = ['IPTU', 'IPTU + TX LIXO', 'IMPOSTO'];
         const luzColumns = ['LUZ', 'ENERGIA', 'ELETRICIDADE'];
@@ -240,26 +327,18 @@ function processDataForImport(data, propertyId) {
         let booking = Math.abs(convertValue(findValue(bookingColumns)));
         let direct = Math.abs(convertValue(findValue(diretasColumns)));
         
-        // Despesas (sempre negativas)
-        const condominium = -Math.abs(convertValue(findValue(condominioColumns)));
-        const iptu = -Math.abs(convertValue(findValue(iptuColumns)));
-        const electricity = -Math.abs(convertValue(findValue(luzColumns)));
-        const internet = -Math.abs(convertValue(findValue(internetColumns)));
-        const platforms = -Math.abs(convertValue(findValue(plataformasColumns)));
-        
-        // Se algum valor vier negativo da planilha, consideramos como despesa
-        if (airbnb < 0) airbnb = 0;
-        if (booking < 0) booking = 0;
-        if (direct < 0) direct = 0;
+        // Despesas (sempre positivas em valores absolutos)
+        let condominium = Math.abs(convertValue(findValue(condominioColumns)));
+        let iptu = Math.abs(convertValue(findValue(iptuColumns)));
+        let electricity = Math.abs(convertValue(findValue(luzColumns)));
+        let internet = Math.abs(convertValue(findValue(internetColumns)));
+        let platforms = Math.abs(convertValue(findValue(plataformasColumns)));
         
         // Receita total
         const totalIncome = airbnb + booking + direct;
         
-        // Despesas totais (já são negativas)
+        // Despesas totais
         const totalExpenses = condominium + iptu + electricity + internet + platforms;
-        
-        // Resultado (receita - despesas)
-        const result = totalIncome + totalExpenses; // Soma pois totalExpenses já é negativo
         
         // Retorna o objeto formatado
         return {
@@ -268,13 +347,12 @@ function processDataForImport(data, propertyId) {
             booking,
             direct,
             totalIncome,
-            condominium: Math.abs(condominium), // Armazena valor absoluto
-            iptu: Math.abs(iptu),
-            electricity: Math.abs(electricity),
-            internet: Math.abs(internet),
-            platforms: Math.abs(platforms),
-            totalExpenses: Math.abs(totalExpenses),
-            result
+            condominium,
+            iptu,
+            electricity,
+            internet,
+            platforms,
+            totalExpenses
         };
     });
 }
@@ -312,154 +390,11 @@ function formatPeriod(periodStr) {
     return periodStr;
 }
 
-function saveImportedData(processedData, propertyId) {
-    // Obtém dados existentes ou inicializa
-    const allProperties = JSON.parse(localStorage.getItem('propertiesData')) || {};
-    
-    // Cria estrutura para a propriedade se não existir
-    if (!allProperties[propertyId]) {
-        allProperties[propertyId] = {
-            transactions: []
-        };
-    }
-    
-    // Atualiza ou adiciona transações
-    processedData.forEach(transaction => {
-        // Verifica se já existe uma transação para este período
-        const existingIndex = allProperties[propertyId].transactions.findIndex(
-            t => t.period === transaction.period
-        );
-        
-        if (existingIndex >= 0) {
-            // Atualiza a transação existente
-            allProperties[propertyId].transactions[existingIndex] = transaction;
-        } else {
-            // Adiciona nova transação
-            allProperties[propertyId].transactions.push(transaction);
-        }
-    });
-    
-    // Ordena as transações por período (mais recente primeiro)
-    allProperties[propertyId].transactions.sort((a, b) => {
-        // Converte período para um formato comparável (assume MM/YYYY)
-        const periodToDate = (period) => {
-            const [month, year] = period.split('/');
-            return new Date(parseInt(year), parseInt(month) - 1);
-        };
-        
-        const dateA = periodToDate(a.period);
-        const dateB = periodToDate(b.period);
-        
-        return dateB - dateA;
-    });
-    
-    // Atualiza métricas da propriedade
-    updatePropertyMetrics(allProperties[propertyId]);
-    
-    // Salva no localStorage
-    localStorage.setItem('propertiesData', JSON.stringify(allProperties));
-    
-    // Atualiza dados do dashboard
-    updateDashboardData(allProperties);
-}
-
-function updatePropertyMetrics(property) {
-    // Calcula métricas baseadas nas transações
-    const transactions = property.transactions;
-    
-    if (!transactions || transactions.length === 0) return;
-    
-    // Últimos 12 meses
-    const last12Months = transactions.slice(0, 12);
-    
-    // Métricas
-    const totalIncome = last12Months.reduce((sum, t) => sum + t.totalIncome, 0);
-    const totalExpenses = last12Months.reduce((sum, t) => sum + t.totalExpenses, 0);
-    const result = totalIncome - totalExpenses;
-    const profitability = totalIncome > 0 ? (result / totalIncome) * 100 : 0;
-    
-    // Armazena as métricas
-    property.metrics = {
-        totalIncome,
-        totalExpenses,
-        result,
-        profitability
-    };
-}
-
-function updateDashboardData(allProperties) {
-    // Atualiza os dados do dashboard com base em todas as propriedades
-    
-    // Extrai todas as transações de todas as propriedades
-    const allTransactions = [];
-    Object.values(allProperties).forEach(property => {
-        if (property.transactions) {
-            allTransactions.push(...property.transactions);
-        }
-    });
-    
-    // Agrupa transações por período
-    const transactionsByPeriod = {};
-    allTransactions.forEach(transaction => {
-        if (!transactionsByPeriod[transaction.period]) {
-            transactionsByPeriod[transaction.period] = {
-                income: 0,
-                expenses: 0,
-                result: 0
-            };
-        }
-        
-        transactionsByPeriod[transaction.period].income += transaction.totalIncome;
-        transactionsByPeriod[transaction.period].expenses += transaction.totalExpenses;
-        transactionsByPeriod[transaction.period].result += transaction.result;
-    });
-    
-    // Converte para array e ordena por período
-    const periodData = Object.entries(transactionsByPeriod).map(([period, data]) => ({
-        period,
-        ...data
-    })).sort((a, b) => {
-        // Converte período para um formato comparável (assume MM/YYYY)
-        const periodToDate = (period) => {
-            const [month, year] = period.split('/');
-            return new Date(parseInt(year), parseInt(month) - 1);
-        };
-        
-        const dateA = periodToDate(a.period);
-        const dateB = periodToDate(b.period);
-        
-        return dateA - dateB; // Ordem cronológica para o gráfico
-    });
-    
-    // Calcula totais gerais para o dashboard
-    const dashboardTotals = {
-        totalIncome: Object.values(allProperties).reduce((sum, p) => sum + (p.metrics?.totalIncome || 0), 0),
-        totalExpenses: Object.values(allProperties).reduce((sum, p) => sum + (p.metrics?.totalExpenses || 0), 0),
-        totalResult: Object.values(allProperties).reduce((sum, p) => sum + (p.metrics?.result || 0), 0)
-    };
-    
-    // Calcula distribuição de receitas
-    const incomeDistribution = {
-        airbnb: allTransactions.reduce((sum, t) => sum + t.airbnb, 0),
-        booking: allTransactions.reduce((sum, t) => sum + t.booking, 0),
-        direct: allTransactions.reduce((sum, t) => sum + t.direct, 0)
-    };
-    
-    // Salva dados do dashboard
-    const dashboardData = {
-        totals: dashboardTotals,
-        periodData,
-        incomeDistribution
-    };
-    
-    localStorage.setItem('dashboardData', JSON.stringify(dashboardData));
-}
-
 function downloadTemplate() {
     // Cria um template de planilha para download
     const template = [
-        ['PERÍODO', 'AIRBNB', 'BOOKING', 'DIRETAS', 'RECEITA', 'CONDOMÍNIO', 'IPTU', 'LUZ', 'INTERNET', 'PLATAFORMAS', 'RESULTADO'],
-        ['01/2025', 'R$ 3.000,00', 'R$ 0,00', 'R$ 0,00', 'R$ 3.000,00', 'R$ 1.000,00', 'R$ 0,00', 'R$ 100,00', 'R$ 120,00', 'R$ 150,00', 'R$ 1.630,00']
+        ['PERÍODO', 'AIRBNB', 'BOOKING', 'DIRETAS', 'RECEITA', 'CONDOMÍNIO', 'IPTU', 'LUZ', 'INTERNET', 'PLATAFORMAS'],
+        ['01/2025', 'R$ 3.000,00', 'R$ 0,00', 'R$ 0,00', 'R$ 3.000,00', 'R$ 1.000,00', 'R$ 150,00', 'R$ 100,00', 'R$ 120,00', 'R$ 150,00']
     ];
     
     // Cria uma planilha
