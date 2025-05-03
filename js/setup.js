@@ -6,7 +6,7 @@ async function setupDatabase() {
         // Criar banco de dados (se não existir)
         try {
             await databases.create(
-                'unique()',
+                ID.unique(),
                 DATABASE_ID,
                 'FlowBnb Database'
             );
