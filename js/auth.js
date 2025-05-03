@@ -23,27 +23,42 @@ function checkLoginStatus() {
     }
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
     event.preventDefault();
     
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     
-    // Validação simples - em uma versão real, você usaria uma API ou Firebase
-    if (email === 'admin@flowbnb.com' && password === 'admin123') {
-        // Usuário admin tem acesso a todas as propriedades
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('userRole', 'admin');
-        localStorage.setItem('userName', 'Administrador');
-        window.location.href = 'pages/dashboard.html';
-    } else if (email === 'coproprietario@flowbnb.com' && password === 'coprop123') {
-        // Co-proprietário tem acesso limitado
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('userRole', 'coproprietario');
-        localStorage.setItem('userName', 'Co-proprietário');
-        localStorage.setItem('propertyAccess', 'property2'); // ID da propriedade que ele tem acesso
-        window.location.href = 'pages/dashboard.html';
-    } else {
+    try {
+        // Criar uma sessão (login) no Appwrite
+        const session = await account.createEmailSession(email, password);
+        
+        // Buscar dados do usuário
+        const user = await account.get();
+        
+        // Buscar informações adicionais do usuário do banco de dados
+        const userData = await databases.listDocuments(
+            DATABASE_ID,
+            USERS_COLLECTION_ID,
+            [Appwrite.Query.equal('email', email)]
+        );
+        
+        if (userData.documents.length > 0) {
+            const userInfo = userData.documents[0];
+            
+            localStorage.setItem('userName', userInfo.name);
+            localStorage.setItem('userRole', userInfo.role);
+            
+            if (userInfo.propertyAccess) {
+                localStorage.setItem('propertyAccess', userInfo.propertyAccess);
+            }
+            
+            window.location.href = 'pages/dashboard.html';
+        } else {
+            throw new Error('Usuário não encontrado.');
+        }
+    } catch (error) {
+        console.error('Erro ao fazer login:', error);
         alert('E-mail ou senha incorretos!');
     }
 }
