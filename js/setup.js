@@ -19,7 +19,7 @@ async function setupDatabase() {
         try {
             await databases.createCollection(
                 DATABASE_ID,
-                'unique()',
+                ID.unique(),
                 USERS_COLLECTION_ID,
                 'Usuários'
             );
@@ -84,7 +84,7 @@ async function setupDatabase() {
         try {
             await databases.createCollection(
                 DATABASE_ID,
-                'unique()',
+                ID.unique(),
                 PROPERTIES_COLLECTION_ID,
                 'Propriedades'
             );
@@ -116,7 +116,7 @@ async function setupDatabase() {
         try {
             await databases.createCollection(
                 DATABASE_ID,
-                'unique()',
+                ID.unique(),
                 TRANSACTIONS_COLLECTION_ID,
                 'Transações'
             );
