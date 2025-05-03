@@ -1,43 +1,78 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
-    <title>Setup Inicial</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup - FlowBnb</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/appwrite@11.0.0"></script>
-    <script src="js/appwrite-config.js"></script>
 </head>
 <body>
-    <h1>Configuração Inicial</h1>
-    <button id="createAdminBtn">Criar Usuário Admin</button>
+    <div class="container">
+        <div class="row justify-content-center mt-5">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>FlowBnb - Configuração Inicial</h2>
+                    </div>
+                    <div class="card-body">
+                        <h4 class="mb-4">Configuração do Banco de Dados</h4>
+                        
+                        <p>Este processo irá configurar o banco de dados Appwrite para o FlowBnb, criando as coleções e atributos necessários, além de um usuário administrador padrão.</p>
+                        
+                        <div class="alert alert-warning">
+                            <strong>Atenção:</strong> Execute este processo apenas uma vez. Se alguma coleção já existir, ela não será recriada.
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" id="setupButton">Iniciar Configuração</button>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <h5>Log de Configuração:</h5>
+                            <pre id="setupLog" class="bg-light p-3" style="height: 300px; overflow-y: auto;"></pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 mt-3">
+                    <a href="index.html" class="btn btn-secondary">Voltar para Login</a>
+                </div>
+            </div>
+        </div>
+    </div>
     
+    <script src="js/appwrite-config.js"></script>
     <script>
-        document.getElementById('createAdminBtn').addEventListener('click', async function() {
-            try {
-                // Criar usuário no Appwrite
-                const user = await account.create(
-                    'unique()', 
-                    'admin@flowbnb.com',
-                    'admin123',
-                    'Administrador'
-                );
-                
-                // Adicionar dados adicionais na coleção de usuários
-                await databases.createDocument(
-                    DATABASE_ID,
-                    USERS_COLLECTION_ID,
-                    'unique()',
-                    {
-                        email: 'admin@flowbnb.com',
-                        name: 'Administrador',
-                        role: 'admin'
-                    }
-                );
-                
-                alert('Usuário administrador criado com sucesso!');
-            } catch (error) {
-                console.error('Erro:', error);
-                alert('Erro ao criar usuário: ' + error.message);
+        // Função para substituir console.log e redirecionar para o setupLog
+        const originalConsoleLog = console.log;
+        const originalConsoleError = console.error;
+        
+        console.log = function() {
+            const args = Array.from(arguments);
+            const logElement = document.getElementById('setupLog');
+            
+            if (logElement) {
+                logElement.innerHTML += args.join(' ') + '\n';
+                logElement.scrollTop = logElement.scrollHeight;
             }
-        });
+            
+            originalConsoleLog.apply(console, args);
+        };
+        
+        console.error = function() {
+            const args = Array.from(arguments);
+            const logElement = document.getElementById('setupLog');
+            
+            if (logElement) {
+                logElement.innerHTML += '<span style="color: red;">' + args.join(' ') + '</span>\n';
+                logElement.scrollTop = logElement.scrollHeight;
+            }
+            
+            originalConsoleError.apply(console, args);
+        };
     </script>
+    <script src="js/setup.js"></script>
 </body>
 </html>
